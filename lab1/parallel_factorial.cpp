@@ -4,6 +4,7 @@
 #include <sys/mman.h>
 #include <sys/stat.h>
 #include <fcntl.h>
+#include <semaphore.h>
 using namespace std;
 
 unsigned long long factorial(int start, int end) {
@@ -16,34 +17,52 @@ unsigned long long factorial(int start, int end) {
 
 int main() {
     const char* shm_name = "/factorial_shm";
+    const char* sem_name = "/factorial_sem";
     int number;
     cout << "Enter a positive integer: ";
     cin >> number;
 
-    // Создаем разделяемую память
+    // РЎРѕР·РґР°РµРј Рё РЅР°СЃС‚СЂР°РёРІР°РµРј СЃРµРјР°С„РѕСЂ
+    sem_t *sem = sem_open(sem_name, O_CREAT, 0666, 1);
+    if (sem == SEM_FAILED) {
+        perror("sem_open failed");
+        return 1;
+    }
+
+    // РЎРѕР·РґР°РµРј СЂР°Р·РґРµР»СЏРµРјСѓСЋ РїР°РјСЏС‚СЊ
     int shm_fd = shm_open(shm_name, O_CREAT | O_RDWR, 0666);
     ftruncate(shm_fd, sizeof(unsigned long long));
     unsigned long long* ptr = (unsigned long long*)mmap(0, sizeof(unsigned long long), PROT_READ | PROT_WRITE, MAP_SHARED, shm_fd, 0);
 
-    *ptr = 1; // Инициализация результата
+    *ptr = 1; // РРЅРёС†РёР°Р»РёР·Р°С†РёСЏ СЂРµР·СѓР»СЊС‚Р°С‚Р°
 
     pid_t pid = fork();
     if (pid == 0) {
-        // Дочерний процесс вычисляет первую половину
+        // Р”РѕС‡РµСЂРЅРёР№ РїСЂРѕС†РµСЃСЃ РІС‹С‡РёСЃР»СЏРµС‚ РїРµСЂРІСѓСЋ РїРѕР»РѕРІРёРЅСѓ
         unsigned long long part = factorial(1, number/2);
-        *ptr *= part; // Умножаем результат
+
+        sem_wait(sem); // Р’С…РѕРґ РІ РєСЂРёС‚РёС‡РµСЃРєСѓСЋ СЃРµРєС†РёСЋ
+        *ptr *= part;  // РЈРјРЅРѕР¶Р°РµРј СЂРµР·СѓР»СЊС‚Р°С‚
+        sem_post(sem); // Р’С‹С…РѕРґ РёР· РєСЂРёС‚РёС‡РµСЃРєРѕР№ СЃРµРєС†РёРё
+
         exit(0);
     } else {
-        // Родительский процесс вычисляет вторую половину
+        // Р РѕРґРёС‚РµР»СЊСЃРєРёР№ РїСЂРѕС†РµСЃСЃ РІС‹С‡РёСЃР»СЏРµС‚ РІС‚РѕСЂСѓСЋ РїРѕР»РѕРІРёРЅСѓ
         unsigned long long part = factorial(number/2 + 1, number);
-        *ptr *= part; // Умножаем результат
-        wait(NULL); // Ждем завершения дочернего процесса
+
+        sem_wait(sem); // Р’С…РѕРґ РІ РєСЂРёС‚РёС‡РµСЃРєСѓСЋ СЃРµРєС†РёСЋ
+        *ptr *= part;  // РЈРјРЅРѕР¶Р°РµРј СЂРµР·СѓР»СЊС‚Р°С‚
+        sem_post(sem); // Р’С‹С…РѕРґ РёР· РєСЂРёС‚РёС‡РµСЃРєРѕР№ СЃРµРєС†РёРё
+
+        wait(NULL); // Р–РґРµРј Р·Р°РІРµСЂС€РµРЅРёСЏ РґРѕС‡РµСЂРЅРµРіРѕ РїСЂРѕС†РµСЃСЃР°
 
         cout << "Factorial of " << number << " is " << *ptr << endl;
 
-        // Освобождаем ресурсы
+        // РћСЃРІРѕР±РѕР¶РґР°РµРј СЂРµСЃСѓСЂСЃС‹
         munmap(ptr, sizeof(unsigned long long));
         shm_unlink(shm_name);
+        sem_close(sem);
+        sem_unlink(sem_name);
     }
 
     return 0;
