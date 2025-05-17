@@ -1,0 +1,17 @@
+как использовать:
+.\search.ps1 -searchPath "C:\test" -searchString "hello" -outputFile "C:\results.txt" будет искать в test строку "hello" и сохранять результат в отдельный текстовый файл
+
+Get-ChildItem получает все файлы:
+-Path $searchPath - ищет в указанной папке
+-Filter "*.txt" - только файлы с расширением .txt
+-Recurse - рекурсивно (включая все подпапки)
+-File - только файлы (исключая папки)
+
+Результаты передаются через конвейер в Where-Object, который фильтрует файлы:
+Select-String ищет текст в каждом файле:
+-Path $_.FullName - путь к текущему файлу
+-Pattern $searchString - искомый текст
+-Quiet - возвращает только true/false
+
+Select-Object -ExpandProperty FullName извлекает полные пути к файлам
+Out-File -FilePath $outputFile записывает пути в указанный файл
